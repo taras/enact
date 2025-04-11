@@ -9,11 +9,29 @@ import {
 import { enact, $, useValue, Value } from "../enact.tsx";
 import { ChangeEventHandler } from "react";
 
-export const Search = enact<{ query: string | undefined }>(function* (props) {
+// Define interfaces for the npm search results
+interface NpmPackage {
+  name: string;
+  version: string;
+  description: string;
+  links: {
+    npm: string;
+  };
+}
+
+interface NpmSearchResult {
+  package: NpmPackage;
+}
+
+interface NpmSearchResponse {
+  results: NpmSearchResult[];
+}
+
+export const Search = enact<{ query?: string | undefined }>(function* (props) {
   const query = useValue(props.query);
 
   const onChange: ChangeEventHandler<HTMLInputElement> = (event) => {
-    query.set(event.target.value);
+    query.set((event.target as HTMLInputElement).value);
   };
 
   return (
@@ -48,7 +66,7 @@ const SearchResults = enact<{ query: Value<string | undefined> }>(function* (pro
         let { results } = yield* npmSearch(q);
         yield* $(<SearchResultsList results={results} />);
       } catch (error) {
-        yield* $(<ErrorMessage error={error} />);
+        yield* $(<ErrorMessage error={error instanceof Error ? error : new Error(String(error))} />);
       }
     });
 
@@ -56,7 +74,7 @@ const SearchResults = enact<{ query: Value<string | undefined> }>(function* (pro
   }
 });
 
-function SearchResultsList({ results }: { results: unknown[] }) {
+function SearchResultsList({ results }: { results: NpmSearchResult[] }) {
   return results.length === 0 ? (
     <p>No results</p>
   ) : (
@@ -85,7 +103,8 @@ function* npmSearch(query: string) {
   let response = yield* call(() => fetch(url, { signal }));
 
   if (response.ok) {
-    return yield* call(() => response.json());
+    const data = yield* call(() => response.json());
+    return data as NpmSearchResponse;
   }
 
   /* If API returns some weird stuff and not 2xx, convert it to error and show
